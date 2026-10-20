@@ -561,14 +561,14 @@
     }
 
     function renderList() {
-      els.list.innerHTML = "";
+      while (els.list.firstChild) els.list.removeChild(els.list.firstChild);
+
       if (!state.items.length) {
-        els.list.appendChild(els.empty);
         els.empty.style.display = "block";
+        els.list.appendChild(els.empty);
         updateMeta();
         return;
       }
-      els.empty.style.display = "none";
 
       state.items.forEach((item, i) => {
         const row = document.createElement("div");
