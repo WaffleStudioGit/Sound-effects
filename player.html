@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Signal — Local Sound Desk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #dfe7ec;
+      --bg1: #c5d2db;
+      --ink: #132029;
+      --ink-soft: #3d5260;
+      --line: rgba(19, 32, 41, 0.12);
+      --surface: rgba(255, 255, 255, 0.55);
+      --surface-strong: rgba(255, 255, 255, 0.78);
+      --accent: #0a7a6a;
+      --accent-hot: #c45a2c;
+      --danger: #b03333;
+      --ok: #1a7a3c;
+      --shadow: 0 18px 50px rgba(19, 32, 41, 0.12);
+      --radius: 14px;
+      --mono: "IBM Plex Sans", system-ui, sans-serif;
+      --display: "Syne", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--mono);
+      background:
+        radial-gradient(1200px 700px at 12% -10%, #f3f7f9 0%, transparent 55%),
+        radial-gradient(900px 600px at 100% 0%, #b9cdd8 0%, transparent 50%),
+        linear-gradient(165deg, var(--bg0), var(--bg1));
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.35;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+      mix-blend-mode: multiply;
+      z-index: 0;
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      width: min(1080px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 2.5rem 0 4rem;
+    }
+
+    header {
+      display: grid;
+      gap: 0.65rem;
+      margin-bottom: 2rem;
+      animation: rise 0.7s ease both;
+    }
+
+    .brand {
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: clamp(2.8rem, 8vw, 4.6rem);
+      letter-spacing: -0.04em;
+      line-height: 0.92;
+      margin: 0;
+    }
+
+    .brand span {
+      color: var(--accent);
+    }
+
+    .lede {
+      margin: 0;
+      max-width: 34rem;
+      color: var(--ink-soft);
+      font-size: 1.05rem;
+      line-height: 1.45;
+    }
+
+    .panel {
+      background: var(--surface);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.25rem;
+      animation: rise 0.75s ease 0.08s both;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .file-btn {
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      border: none;
+      border-radius: 999px;
+      padding: 0.8rem 1.25rem;
+      background: var(--ink);
+      color: #f4f8fa;
+      font: 600 0.95rem var(--mono);
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+
+    .file-btn:hover { transform: translateY(-1px); background: #1c3340; }
+    .file-btn:active { transform: translateY(0); }
+    .file-btn input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .ghost {
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 0.75rem 1.1rem;
+      font: 600 0.9rem var(--mono);
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .ghost:hover { background: #fff; border-color: rgba(19,32,41,0.25); }
+    .ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .primary {
+      border: none;
+      background: var(--accent);
+      color: #f5fffc;
+      border-radius: 999px;
+      padding: 0.75rem 1.2rem;
+      font: 600 0.9rem var(--mono);
+      cursor: pointer;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+
+    .primary:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; filter: none; }
+
+    .primary.playing { background: var(--accent-hot); }
+
+    .meta {
+      margin-left: auto;
+      color: var(--ink-soft);
+      font-size: 0.9rem;
+    }
+
+    .controls {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(12, 1fr);
+      margin-bottom: 1.25rem;
+    }
+
+    .field {
+      grid-column: span 4;
+      display: grid;
+      gap: 0.4rem;
+    }
+
+    @media (max-width: 800px) {
+      .field { grid-column: span 12; }
+      .meta { margin-left: 0; width: 100%; }
+    }
+
+    label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+    }
+
+    select {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--surface-strong) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%133d5260' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") right 0.85rem center / 12px no-repeat;
+      border-radius: 10px;
+      padding: 0.7rem 2.2rem 0.7rem 0.85rem;
+      font: 500 0.95rem var(--mono);
+      color: var(--ink);
+    }
+
+    .range-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.6rem;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      accent-color: var(--accent);
+      height: 1.4rem;
+    }
+
+    .val {
+      min-width: 3.2rem;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .hint {
+      margin: 0 0 1rem;
+      color: var(--ink-soft);
+      font-size: 0.9rem;
+    }
+
+    .now {
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      margin-bottom: 1rem;
+      border-radius: 12px;
+      background: rgba(10, 122, 106, 0.12);
+      border: 1px solid rgba(10, 122, 106, 0.25);
+      animation: pulseIn 0.35s ease;
+    }
+
+    .now.visible { display: flex; }
+
+    .now-dot {
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(10, 122, 106, 0.5);
+      animation: ping 1.4s ease infinite;
+      flex-shrink: 0;
+    }
+
+    .now strong { font-weight: 600; }
+    .now .sub { color: var(--ink-soft); font-size: 0.88rem; }
+
+    .list {
+      display: grid;
+      gap: 0.5rem;
+      max-height: min(52vh, 520px);
+      overflow: auto;
+      padding-right: 0.25rem;
+    }
+
+    .empty {
+      padding: 2.5rem 1rem;
+      text-align: center;
+      color: var(--ink-soft);
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+    }
+
+    .track {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.85rem;
+      align-items: center;
+      padding: 0.7rem 0.85rem;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: var(--surface-strong);
+      transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+      animation: rise 0.45s ease both;
+    }
+
+    .track:hover { border-color: var(--line); }
+    .track.active {
+      border-color: rgba(10, 122, 106, 0.45);
+      background: rgba(10, 122, 106, 0.1);
+    }
+
+    .play-one {
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 50%;
+      border: none;
+      background: var(--ink);
+      color: #f4f8fa;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: grid;
+      place-items: center;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .play-one:hover { transform: scale(1.05); background: #1c3340; }
+    .track.active .play-one { background: var(--accent); }
+
+    .name {
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .size {
+      color: var(--ink-soft);
+      font-size: 0.82rem;
+      margin-top: 0.15rem;
+    }
+
+    .remove {
+      border: none;
+      background: transparent;
+      color: var(--ink-soft);
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 8px;
+    }
+
+    .remove:hover { color: var(--danger); background: rgba(176, 51, 51, 0.08); }
+
+    footer {
+      margin-top: 1rem;
+      color: var(--ink-soft);
+      font-size: 0.82rem;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulseIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes ping {
+      0% { box-shadow: 0 0 0 0 rgba(10, 122, 106, 0.45); }
+      70% { box-shadow: 0 0 0 10px rgba(10, 122, 106, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(10, 122, 106, 0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 class="brand">Signal<span>.</span></h1>
+      <p class="lede">Point this page at sound files on your device. Play them one at a time, shuffled, or at random — with optional pitch and volume variation between hits.</p>
+    </header>
+
+    <section class="panel" aria-label="Sound desk">
+      <div class="toolbar">
+        <label class="file-btn">
+          Add local files
+          <input id="fileInput" type="file" accept="audio/*,video/*" multiple />
+        </label>
+        <button class="primary" id="runBtn" disabled>Start session</button>
+        <button class="ghost" id="stopBtn" disabled>Stop</button>
+        <button class="ghost" id="clearBtn" disabled>Clear list</button>
+        <div class="meta" id="countMeta">0 files loaded</div>
+      </div>
+
+      <div class="controls">
+        <div class="field">
+          <label for="mode">Playback mode</label>
+          <select id="mode">
+            <option value="sequential">One at a time (in order)</option>
+            <option value="shuffle">Shuffle (each file once, random order)</option>
+            <option value="random">Random (any file each play)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="gap">Gap between plays</label>
+          <div class="range-row">
+            <input id="gap" type="range" min="0" max="5000" step="100" value="400" />
+            <span class="val" id="gapVal">0.4s</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="loop">Session loop</label>
+          <select id="loop">
+            <option value="off">Stop when finished</option>
+            <option value="on" selected>Keep going</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="rateVar">Pitch / speed variation</label>
+          <div class="range-row">
+            <input id="rateVar" type="range" min="0" max="40" step="1" value="12" />
+            <span class="val" id="rateVal">±12%</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="volVar">Volume variation</label>
+          <div class="range-row">
+            <input id="volVar" type="range" min="0" max="40" step="1" value="8" />
+            <span class="val" id="volVal">±8%</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="baseVol">Base volume</label>
+          <div class="range-row">
+            <input id="baseVol" type="range" min="0" max="100" step="1" value="85" />
+            <span class="val" id="baseVolVal">85%</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="hint" id="modeHint">Plays files top to bottom. Variation nudges pitch and volume on each play so repeats feel less identical.</p>
+
+      <div class="now" id="nowPlaying" aria-live="polite">
+        <span class="now-dot" aria-hidden="true"></span>
+        <div>
+          <div><strong id="nowName">—</strong></div>
+          <div class="sub" id="nowStats">—</div>
+        </div>
+      </div>
+
+      <div class="list" id="list" role="list">
+        <div class="empty" id="empty">Drop files with the button above. Audio works best; short clips shine with variation.</div>
+      </div>
+
+      <footer>Files stay on your device — nothing is uploaded. Open this HTML file in a browser and pick your sounds.</footer>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      items: [],
+      queue: [],
+      queueIndex: 0,
+      running: false,
+      currentAudio: null,
+      currentId: null,
+      gapTimer: null,
+      objectUrls: new Map(),
+    };
+
+    const els = {
+      fileInput: document.getElementById("fileInput"),
+      runBtn: document.getElementById("runBtn"),
+      stopBtn: document.getElementById("stopBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      countMeta: document.getElementById("countMeta"),
+      mode: document.getElementById("mode"),
+      gap: document.getElementById("gap"),
+      gapVal: document.getElementById("gapVal"),
+      loop: document.getElementById("loop"),
+      rateVar: document.getElementById("rateVar"),
+      rateVal: document.getElementById("rateVal"),
+      volVar: document.getElementById("volVar"),
+      volVal: document.getElementById("volVal"),
+      baseVol: document.getElementById("baseVol"),
+      baseVolVal: document.getElementById("baseVolVal"),
+      modeHint: document.getElementById("modeHint"),
+      nowPlaying: document.getElementById("nowPlaying"),
+      nowName: document.getElementById("nowName"),
+      nowStats: document.getElementById("nowStats"),
+      list: document.getElementById("list"),
+      empty: document.getElementById("empty"),
+    };
+
+    const modeHints = {
+      sequential: "Plays files top to bottom. Variation nudges pitch and volume on each play so repeats feel less identical.",
+      shuffle: "Builds a random order of every file, plays through once, then reshuffles if looping is on.",
+      random: "Picks any loaded file at random for each play — great for ambient / coincidence beds.",
+    };
+
+    function uid() {
+      return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
+    }
+
+    function formatBytes(n) {
+      if (n < 1024) return n + " B";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+      return (n / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function clamp(n, min, max) {
+      return Math.min(max, Math.max(min, n));
+    }
+
+    function randAround(base, pct) {
+      if (!pct) return base;
+      const delta = (Math.random() * 2 - 1) * (pct / 100);
+      return base * (1 + delta);
+    }
+
+    function updateRangeLabels() {
+      els.gapVal.textContent = (Number(els.gap.value) / 1000).toFixed(1) + "s";
+      els.rateVal.textContent = "±" + els.rateVar.value + "%";
+      els.volVal.textContent = "±" + els.volVar.value + "%";
+      els.baseVolVal.textContent = els.baseVol.value + "%";
+    }
+
+    function updateMeta() {
+      const n = state.items.length;
+      els.countMeta.textContent = n + " file" + (n === 1 ? "" : "s") + " loaded";
+      const has = n > 0;
+      els.runBtn.disabled = !has;
+      els.clearBtn.disabled = !has;
+      els.stopBtn.disabled = !state.running;
+      els.runBtn.textContent = state.running ? "Playing…" : "Start session";
+      els.runBtn.classList.toggle("playing", state.running);
+    }
+
+    function revokeAll() {
+      for (const url of state.objectUrls.values()) URL.revokeObjectURL(url);
+      state.objectUrls.clear();
+    }
+
+    function stopCurrent() {
+      if (state.gapTimer) {
+        clearTimeout(state.gapTimer);
+        state.gapTimer = null;
+      }
+      if (state.currentAudio) {
+        state.currentAudio.onended = null;
+        state.currentAudio.onerror = null;
+        state.currentAudio.pause();
+        state.currentAudio.src = "";
+        state.currentAudio = null;
+      }
+      state.currentId = null;
+      els.nowPlaying.classList.remove("visible");
+      highlightActive(null);
+    }
+
+    function stopSession() {
+      state.running = false;
+      state.queue = [];
+      state.queueIndex = 0;
+      stopCurrent();
+      updateMeta();
+    }
+
+    function highlightActive(id) {
+      for (const node of els.list.querySelectorAll(".track")) {
+        node.classList.toggle("active", node.dataset.id === id);
+      }
+    }
+
+    function renderList() {
+      while (els.list.firstChild) els.list.removeChild(els.list.firstChild);
+
+      if (!state.items.length) {
+        els.empty.style.display = "block";
+        els.list.appendChild(els.empty);
+        updateMeta();
+        return;
+      }
+
+      state.items.forEach((item, i) => {
+        const row = document.createElement("div");
+        row.className = "track";
+        row.dataset.id = item.id;
+        row.style.animationDelay = (i * 0.03) + "s";
+        row.setAttribute("role", "listitem");
+
+        const btn = document.createElement("button");
+        btn.className = "play-one";
+        btn.type = "button";
+        btn.title = "Play once";
+        btn.setAttribute("aria-label", "Play " + item.name);
+        btn.textContent = "▶";
+        btn.addEventListener("click", () => playOneShot(item));
+
+        const info = document.createElement("div");
+        info.innerHTML =
+          '<div class="name"></div><div class="size"></div>';
+        info.querySelector(".name").textContent = item.name;
+        info.querySelector(".size").textContent = formatBytes(item.size) + " · " + (item.type || "audio");
+
+        const remove = document.createElement("button");
+        remove.className = "remove";
+        remove.type = "button";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => removeItem(item.id));
+
+        row.append(btn, info, remove);
+        els.list.appendChild(row);
+      });
+
+      highlightActive(state.currentId);
+      updateMeta();
+    }
+
+    function removeItem(id) {
+      const item = state.items.find((x) => x.id === id);
+      if (!item) return;
+      if (state.currentId === id) stopCurrent();
+      const url = state.objectUrls.get(id);
+      if (url) {
+        URL.revokeObjectURL(url);
+        state.objectUrls.delete(id);
+      }
+      state.items = state.items.filter((x) => x.id !== id);
+      state.queue = state.queue.filter((x) => x !== id);
+      renderList();
+      if (state.running && !state.items.length) stopSession();
+    }
+
+    function addFiles(fileList) {
+      const files = Array.from(fileList || []).filter((f) =>
+        f.type.startsWith("audio/") || f.type.startsWith("video/") || /\.(mp3|wav|ogg|m4a|aac|flac|webm|mp4)$/i.test(f.name)
+      );
+      for (const file of files) {
+        const id = uid();
+        const url = URL.createObjectURL(file);
+        state.objectUrls.set(id, url);
+        state.items.push({
+          id,
+          name: file.name,
+          size: file.size,
+          type: file.type || "unknown",
+          url,
+        });
+      }
+      renderList();
+    }
+
+    function buildQueue() {
+      const ids = state.items.map((x) => x.id);
+      if (els.mode.value === "shuffle") {
+        const q = ids.slice();
+        for (let i = q.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [q[i], q[j]] = [q[j], q[i]];
+        }
+        return q;
+      }
+      return ids.slice();
+    }
+
+    function nextItem() {
+      if (!state.items.length) return null;
+
+      if (els.mode.value === "random") {
+        return state.items[Math.floor(Math.random() * state.items.length)];
+      }
+
+      if (!state.queue.length || state.queueIndex >= state.queue.length) {
+        if (els.loop.value === "off" && state.queue.length) return null;
+        state.queue = buildQueue();
+        state.queueIndex = 0;
+        if (!state.queue.length) return null;
+      }
+
+      const id = state.queue[state.queueIndex++];
+      return state.items.find((x) => x.id === id) || null;
+    }
+
+    function applyVariation(audio) {
+      const ratePct = Number(els.rateVar.value);
+      const volPct = Number(els.volVar.value);
+      const base = Number(els.baseVol.value) / 100;
+
+      const rate = clamp(randAround(1, ratePct), 0.5, 2);
+      const vol = clamp(randAround(base, volPct), 0, 1);
+
+      audio.playbackRate = rate;
+      audio.volume = vol;
+
+      return { rate, vol };
+    }
+
+    function playItem(item, { continueSession }) {
+      stopCurrent();
+      const audio = new Audio(item.url);
+      state.currentAudio = audio;
+      state.currentId = item.id;
+      highlightActive(item.id);
+
+      const { rate, vol } = applyVariation(audio);
+
+      els.nowName.textContent = item.name;
+      els.nowStats.textContent =
+        "rate " + rate.toFixed(2) + "× · volume " + Math.round(vol * 100) + "%";
+      els.nowPlaying.classList.add("visible");
+
+      audio.onended = () => {
+        if (!continueSession || !state.running) {
+          if (!state.running) {
+            state.currentId = null;
+            highlightActive(null);
+            els.nowPlaying.classList.remove("visible");
+          }
+          return;
+        }
+        scheduleNext();
+      };
+
+      audio.onerror = () => {
+        if (continueSession && state.running) scheduleNext();
+        else stopSession();
+      };
+
+      const playPromise = audio.play();
+      if (playPromise && playPromise.catch) {
+        playPromise.catch(() => {
+          if (continueSession && state.running) scheduleNext();
+          else stopSession();
+        });
+      }
+    }
+
+    function scheduleNext() {
+      const gap = Number(els.gap.value);
+      state.gapTimer = setTimeout(() => {
+        state.gapTimer = null;
+        if (!state.running) return;
+        const item = nextItem();
+        if (!item) {
+          stopSession();
+          return;
+        }
+        playItem(item, { continueSession: true });
+      }, gap);
+    }
+
+    function startSession() {
+      if (!state.items.length) return;
+      stopCurrent();
+      state.running = true;
+      state.queue = buildQueue();
+      state.queueIndex = 0;
+      updateMeta();
+      const item = nextItem();
+      if (!item) {
+        stopSession();
+        return;
+      }
+      playItem(item, { continueSession: true });
+    }
+
+    function playOneShot(item) {
+      // Manual trigger interrupts the session so one-shots stay predictable
+      if (state.running) stopSession();
+      playItem(item, { continueSession: false });
+      updateMeta();
+    }
+
+    els.fileInput.addEventListener("change", (e) => {
+      addFiles(e.target.files);
+      e.target.value = "";
+    });
+
+    els.runBtn.addEventListener("click", () => {
+      if (state.running) return;
+      startSession();
+    });
+
+    els.stopBtn.addEventListener("click", stopSession);
+    els.clearBtn.addEventListener("click", () => {
+      stopSession();
+      revokeAll();
+      state.items = [];
+      renderList();
+    });
+
+    els.mode.addEventListener("change", () => {
+      els.modeHint.textContent = modeHints[els.mode.value] || "";
+      if (state.running) {
+        state.queue = buildQueue();
+        state.queueIndex = 0;
+      }
+    });
+
+    ["gap", "rateVar", "volVar", "baseVol"].forEach((id) => {
+      els[id].addEventListener("input", updateRangeLabels);
+    });
+
+    window.addEventListener("beforeunload", () => {
+      stopSession();
+      revokeAll();
+    });
+
+    // Drag & drop onto the page
+    ["dragenter", "dragover"].forEach((evt) => {
+      window.addEventListener(evt, (e) => {
+        e.preventDefault();
+      });
+    });
+    window.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
+
+    updateRangeLabels();
+    updateMeta();
+  </script>
+</body>
+</html>
